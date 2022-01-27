@@ -40,6 +40,9 @@ module iofits
 
   
   public write_twod_fits, check_fits_header, read_twod_fits
+
+  public write_wcsimage_fits
+
   public read_xtension_fits, read_bintable_key, read_asctable_fits 
 
   public print_table_hdr
@@ -188,6 +191,70 @@ contains
     
   end subroutine write_twod_fits
 
+
+
+  subroutine write_wcsimage_fits(filename,image,wcsheader)
+    implicit none
+    character(len=*), intent(in) :: filename
+    real(fdp), dimension(:,:), intent(in) :: image
+    character(len=*), dimension(:), intent(in), optional :: wcsheader
+    
+    integer :: unit, status
+    logical :: simple, extend
+    
+    integer, parameter :: naxis = 2
+    integer, dimension(naxis) :: naxes
+    integer ::  blocksize, bitpix
+    
+    integer(idp) :: nelements, group, fpixel
+    
+
+    integer :: i, nkeys
+       
+    status=0
+    call ftgiou(unit,status)
+    blocksize=1
+    call ftinit(unit,filename,blocksize,status)
+
+    if (status.ne.0) then
+       write(*,*) 'write_wcs_image: cannot open file: ',filename
+       stop
+    end if
+    
+    simple=.true.
+    bitpix=-32
+    naxes(1)=size(image,1)
+    naxes(2)=size(image,2)
+    extend=.true.
+
+    call ftphpr(unit,simple,bitpix,naxis,naxes,0,1,extend,status)
+
+    if (present(wcsheader)) then
+       nkeys = size(wcsheader,1)
+       do i=1,nkeys
+          call ftprec(unit,wcsheader(i),status)
+          if (status.ne.0) then
+             write(*,*)'issue writing card= ',wcsheader(i)
+          end if
+       end do
+    end if
+
+    group=1
+    fpixel=1
+
+    nelements = naxes(1)*naxes(2)
+
+    !this punk overlflows for 64k images due to nelements not being
+    !    long long...
+    !call ftpprd(unit,group,fpixel,nelements,image,status)
+    
+    call ftp2dd(unit,group,naxes(1),naxes(1),naxes(2),image,status)
+    
+    call ftclos(unit,status)
+    call ftfiou(unit,status)
+    
+  end subroutine write_wcsimage_fits
+  
   
 !open the ieme extension image of filename
   subroutine read_xtension_fits(filename,naxes,image)
@@ -1043,7 +1110,7 @@ contains
     
     nelements = size(data,1)
     tfields = size(data,2)
-
+    
     felem = 1
     status = 0
     anynull = .false.
@@ -1052,8 +1119,12 @@ contains
        call ftgcvd(unit,icol,frow,felem,nelements,nullval,data(:,icol),anynull,status)
        if (anynull) then
           write(*,*)'icol= ',icol
-          stop 'stream_bintable_fits: undefined value read!'
+          stop 'stream_doubletable_fits: undefined value read!'
        endif
+       if (status.ne.0) then
+          write(*,*)'stream_doubletable_fits: error= ',status
+          stop
+       end if
     enddo
 
 
