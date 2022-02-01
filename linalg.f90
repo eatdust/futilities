@@ -297,7 +297,9 @@ contains
        jstart = startStopPairs(j,1)
        jstop = startStopPairs(j,2)
 
-       do i=j-1,0,-1
+!fix: was i=j-1,0,-1
+       
+       do i=j-1,1,-1
           istart = startStopPairs(i,1)
           istop = startStopPairs(i,1)
           allocate(s(istop-istart+1,jstop-jstart+1))
