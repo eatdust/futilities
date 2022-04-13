@@ -51,18 +51,19 @@ module sundials
 contains
 
 
-  function easycvode(n,cvoderhs,tini,yini,tend)
+  function easycvode(n,cvoderhs,tini,yini,tend,tol)
     implicit none
     include 'sundials.h'
     integer, intent(in) :: n
     real(fdp), intent(in) :: tini
     real(fdp), intent(in) :: tend
+    real(fdp), intent(in), optional :: tol
     real(fdp), dimension(n), intent(in) :: yini
     real(fdp), dimension(n) :: easycvode
 
     real(fdp), dimension(n,1) :: output
        
-    output = stepscvode_nls(n,cvoderhs,tini,yini,(/tend/))
+    output = stepscvode_nls(n,cvoderhs,tini,yini,(/tend/),tol)
 
     easycvode = output(1:n,1) 
     
@@ -71,7 +72,7 @@ contains
 
   
 
-  function stepscvode_nls(n,cvoderhs,tini,yini,tend)
+  function stepscvode_nls(n,cvoderhs,tini,yini,tend,tol)
     implicit none
 
     include 'sundials.h'
@@ -81,6 +82,7 @@ contains
     real(fdp), dimension(:), intent(in) :: tend
     real(fdp), dimension(n), intent(in) :: yini
     real(fdp), dimension(n,size(tend,1)) :: stepscvode_nls
+    real(fdp), intent(in) , optional :: tol
     
     integer(c_long) :: neq
     real(c_double) :: tstart, tout
@@ -93,11 +95,17 @@ contains
 
     
     
-    real(c_double), parameter :: rtol = 1d-10
+    real(c_double) :: rtol
     real(c_double), parameter :: atol = 100._c_double * epsilon(1._c_double)
   
     integer :: i,nsteps
-    
+
+    if (present(tol)) then
+       rtol = real(tol,c_double)
+    else
+       rtol = 1d-10
+    endif
+       
     
     neq = int(n,c_long)
     tstart = real(tini,c_double)
@@ -150,9 +158,9 @@ contains
 
     do i=1,nsteps
        tout = real(tend(i),c_double)
-       if (tout.le.tcur(1)) then
-          stop 'stepscvode_nls: tend vector is not steadily increasing!'
-       endif
+!       if (tout.le.tcur(1)) then
+!         write(*,*) 'stepscvode_nls: tend vector is not steadily increasing!'
+!       endif
        ierr = FCVode(sun%mem, tout, sun%vecY, tcur, CV_NORMAL)
 
        if (ierr.ne.0) then
