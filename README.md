@@ -4,7 +4,8 @@
 
 ### Brief summary of their purpose
 
-* bspline: Multidimensional spline interpolations (check file for original Author).
+* bspline: Multidimensional spline interpolations (check source file
+  for original author).
 
 * cuba: Fortran interface to the [**cuba**](https://feynarts.de/cuba/)
   multidimensional integrator.
@@ -20,8 +21,10 @@
 
 * scheduler: A basic Message Passing Interface (MPI) queue
   scheduler. It distributes an equal list of jobs to various MPI
-  process; when some of these processes have finished their load, they
+  processes. When some of these processes have finished their load, they
   can start stealing work to the others.
+
+* index: A little module to shuffle array indexing.
 
 * iopara: A module to wrap-up some parallel writting function of the
   Message Passing Interface (MPI) library.
@@ -30,9 +33,8 @@
 
 * fwcs: A Fortran interface to the World Coordinate System library [**wcslib**](https://www.atnf.csiro.au/people/mcalabre/WCS/)
 
-* wcswrap.c: A C-wrapper to some functions of the **wcslib** for the fwcs module
+* wcswrap.c: A C-wrapper to some functions of the **wcslib**, for the fwcs module
 
-* index: A little module to shuffle array indexing.
 
 * iofits: A Fortran interface to some functions of the [**fitsio**](https://heasarc.gsfc.nasa.gov/fitsio/) library.
 
@@ -52,6 +54,6 @@
 
 ### Licensing
 
-Some modules encapsulates some public code, these modules inherit the
-licence of their ancestors. For the others, this is GPLv3, even if not
+Some modules encapsulate some public code and they inherit their
+licence from their ancestor. For the others, this is GPLv3, even if not
 mentioned in the source file yet.
