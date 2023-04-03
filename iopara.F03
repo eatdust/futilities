@@ -2,15 +2,18 @@ module iopara
   use mpi
 
   implicit none
-
-  integer, parameter :: dp = kind(1.0_8)
-  
   private
 
 
+  interface ascii_write_parallel
+     module procedure ascii_write_parallel_vector
+  end interface ascii_write_parallel
+
+  integer, parameter :: dp = kind(1.0_8)
+  
 
   public open_parallel_file, close_parallel_file
-  public ascii_write_parallel_vectors
+  public ascii_write_parallel
   
 
 contains
@@ -26,7 +29,8 @@ contains
     integer :: lenErrorMessage
     integer :: icodeBis
 
-    call MPI_FILE_OPEN(MPI_COMM_WORLD,filename,MPI_MODE_RDWR + MPI_MODE_CREATE, &
+    call MPI_FILE_OPEN(MPI_COMM_WORLD,filename, &
+         MPI_MODE_WRONLY + MPI_MODE_CREATE + MPI_MODE_APPEND, &
          MPI_INFO_NULL,ides,icode)
 
     if (icode .ne. MPI_SUCCESS) then
@@ -40,7 +44,7 @@ contains
 
 
 
-  subroutine ascii_write_parallel_vectors(ides,data)
+  subroutine ascii_write_parallel_vector(ides,data)
     implicit none
     integer :: ides
     real(dp), dimension(:), intent(in) :: data
@@ -72,12 +76,12 @@ contains
        stop 'character lengtb error!'
     endif
 
-    call MPI_FILE_WRITE_ORDERED(ides,cvec//new_line(cbuffer),nsize*lencbuffer+1,MPI_CHARACTER &
+    call MPI_FILE_WRITE_SHARED(ides,cvec//new_line(cbuffer),nsize*lencbuffer+1,MPI_CHARACTER &
          ,status,icode)
     
     deallocate(cvec)
 
-  end subroutine ascii_write_parallel_vectors
+  end subroutine ascii_write_parallel_vector
   
 
   subroutine close_parallel_file(ides)
