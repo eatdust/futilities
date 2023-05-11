@@ -50,6 +50,8 @@
 
 * sundials: A module to call the differential equation solvers of the [**sundials**](https://computing.llnl.gov/projects/sundials) library.
 
+* funcutils: A module to do basic derivation (uses bspline) and integration (based in dverk, netlib).
+
 ---
 
 ### Licensing
