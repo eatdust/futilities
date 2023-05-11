@@ -4,6 +4,8 @@ module sundials
   use, intrinsic :: iso_c_binding
   use precision, only : fdp
 
+  use fsundials_context_mod
+
   use fcvode_mod
 
   use fsundials_nvector_mod
@@ -27,10 +29,12 @@ module sundials
   
   type fsun
      type(c_ptr) :: mem
+     type(c_ptr) :: ctx
      type(N_Vector), pointer :: vecY
      type(SUNMatrix), pointer :: matA
      type(SUNLinearSolver), pointer :: ls 
      type(SUNNonlinearSolver), pointer :: nls
+
   end type fsun
 
 
@@ -112,17 +116,22 @@ contains
     yvec = real(yini,c_double)
 
     nsteps = size(tend,1)
+
+!context creation (sundials >= 6.0)
+    ierr = FSUNContext_Create(c_null_ptr,sun%ctx)
+    if (ierr.ne.0) stop 'error in sunctx creation!'
     
 !initialize module procedure pointer
     cvodedata%ndim = neq
     cvodedata%ptr_rhs => cvoderhs
     
 !create sundial vect (yvec is target)
-    sun%vecY => FN_VMake_Serial(neq,yvec)
+    sun%vecY => FN_VMake_Serial(neq,yvec,sun%ctx)
 
 
 !allocate CVode solver (ADAMS method or BDF for stiff)
-    sun%mem = FCVodeCreate(CV_ADAMS)
+    sun%mem = FCVodeCreate(CV_ADAMS ,sun%ctx)
+
     
 !initialization
     ierr = FCVodeInit(sun%mem, c_funloc(cvode_rhs), tstart, sun%vecY)
@@ -141,7 +150,7 @@ contains
     ierr = FCVodeSetMaxNumSteps(sun%mem,mxsteps)
     
 !create a non-linear solver    
-    sun%nls => FSUNNonlinSol_FixedPoint(sun%vecY, 0)
+    sun%nls => FSUNNonlinSol_FixedPoint(sun%vecY, 0, sun%ctx)
 
 
 !attach nonlinear solver object to CVode
@@ -177,6 +186,9 @@ contains
     call FCVodeFree(sun%mem)
     ierr = FSUNNonLinSolFree(sun%nls)
     call FN_VDestroy(sun%vecY)
+
+!delete context    
+    ierr = FSUNContext_Free(sun%ctx)
     
   end function stepscvode_nls
   
@@ -221,18 +233,22 @@ contains
     cvodedata%ndim = neq
     cvodedata%ptr_rhs => cvoderhs
     cvodedata%ptr_jac => cvodejac
+
+!context creation (sundials >= 6.0)
+    ierr = FSUNContext_Create(c_null_ptr,sun%ctx)
+    if (ierr.ne.0) stop 'error in sunctx creation!'
     
 !create sundial vect (yvec is target)
-    sun%vecY => FN_VMake_Serial(neq,yvec)
+    sun%vecY => FN_VMake_Serial(neq, yvec, sun%ctx)
 
 !create a dense matrix
-    sun%matA => FSUNDenseMatrix(neq, neq)
+    sun%matA => FSUNDenseMatrix(neq, neq, sun%ctx)
 
 !create a linear solver
-    sun%ls => FSUNDenseLinearSolver(sun%vecY, sun%matA)
+    sun%ls =>  FSUNLinSol_Dense(sun%vecY, sun%matA, sun%ctx)
     
 !allocate CVode solver (ADAMS method or BDF for stiff)
-    sun%mem = FCVodeCreate(CV_ADAMS)
+    sun%mem = FCVodeCreate(CV_ADAMS, sun%ctx)
     
 !initialization
     ierr = FCVodeInit(sun%mem, c_funloc(cvode_rhs), tstart, sun%vecY)
@@ -288,6 +304,9 @@ contains
     ierr = FSUNLinSolFree(sun%ls)
     call FSUNMatDestroy(sun%matA)
     call FN_VDestroy(sun%vecY)
+
+!delete context    
+    ierr = FSUNContext_Free(sun%ctx)
     
   end function stepscvode_ls
   
