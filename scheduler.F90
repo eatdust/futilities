@@ -1,3 +1,21 @@
+!   This file is part of futilities
+!
+!   Copyright (C) 2013-2021 C. Ringeval
+!   
+!   futilities is free software: you can redistribute it and/or modify
+!   it under the terms of the GNU General Public License as published by
+!   the Free Software Foundation, either version 3 of the License, or
+!   (at your option) any later version.
+!
+!   futilities is distributed in the hope that it will be useful,
+!   but WITHOUT ANY WARRANTY; without even the implied warranty of
+!   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!   GNU General Public License for more details.
+!
+!   You should have received a copy of the GNU General Public License
+!   along with futilities.  If not, see <https://www.gnu.org/licenses/>.
+
+
 module scheduler
 #ifdef MPISCHED
   use mpi
@@ -47,7 +65,7 @@ module scheduler
     
   public initialize_scheduler, free_scheduler, scheduler_save_queue
   public start_scheduling, irq_scheduler, stop_scheduling
-  public restore_scheduler, scheduled_size
+  public restore_scheduler, scheduled_size, check_saved_queue
       
 contains
 
@@ -323,6 +341,15 @@ contains
   end subroutine redistribute_saved_queues
 
 
+  function check_saved_queue(rank)
+    use iofifo, only : check_queue_file
+    implicit none
+    logical :: check_saved_queue
+    integer :: rank
+
+    check_saved_queue = check_queue_file(rank)
+
+  end function check_saved_queue
 
 
   subroutine scheduler_save_queue(rank)

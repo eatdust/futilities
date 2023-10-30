@@ -1,3 +1,20 @@
+!   This file is part of futilities
+!
+!   Copyright (C) 2013-2021 C. Ringeval
+!   
+!   futilities is free software: you can redistribute it and/or modify
+!   it under the terms of the GNU General Public License as published by
+!   the Free Software Foundation, either version 3 of the License, or
+!   (at your option) any later version.
+!
+!   futilities is distributed in the hope that it will be useful,
+!   but WITHOUT ANY WARRANTY; without even the implied warranty of
+!   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!   GNU General Public License for more details.
+!
+!   You should have received a copy of the GNU General Public License
+!   along with futilities.  If not, see <https://www.gnu.org/licenses/>.
+
 module iofifo
   use fifo, only : ends, qval, node
   implicit none
@@ -6,7 +23,7 @@ module iofifo
 
   public dump_queue_vals, read_queue_vals
 
-  public write_queue_vals
+  public write_queue_vals, check_queue_file
 
   integer, parameter :: lenIoRank = 4
   integer, parameter :: lenIoMax = 64
@@ -134,8 +151,31 @@ contains
   end subroutine dump_queue_vals
 
 
+  function check_queue_file(rank)
+    implicit none
+    integer, intent(in), optional :: rank
+    logical :: check_queue_file
+
+    integer, parameter :: nunit = 301
+    character(len=lenIoMax) :: filename
+
+    logical :: ishere
+    integer :: nsize,i
+
+    if (present(rank)) then
+       filename = queue_filename(rank)
+    else
+       filename = queue_filename()
+    endif
+
+    inquire(file=filename,exist=ishere) 
+    
+    check_queue_file = ishere
+        
+  end function check_queue_file
 
 
+  
   subroutine read_queue_vals(ptrval, rank)
     implicit none
     type(qval), dimension(:), intent(inout), pointer :: ptrval
