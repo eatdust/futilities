@@ -1,3 +1,20 @@
+!   This file is part of futilities
+!
+!   Copyright (C) 2022 C. Ringeval
+!   
+!   gaialaxy is free software: you can redistribute it and/or modify
+!   it under the terms of the GNU General Public License as published by
+!   the Free Software Foundation, either version 3 of the License, or
+!   (at your option) any later version.
+!
+!   gaialaxy is distributed in the hope that it will be useful,
+!   but WITHOUT ANY WARRANTY; without even the implied warranty of
+!   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!   GNU General Public License for more details.
+!
+!   You should have received a copy of the GNU General Public License
+!   along with futilities. If not, see <https://www.gnu.org/licenses/>.
+
 module iofits
   use precision
 
@@ -40,7 +57,10 @@ module iofits
 
   
   public write_twod_fits, check_fits_header, read_twod_fits
-
+  public read_image_fits, copy_hdr_fits, overwrite_image_fits
+  
+  public read_kernel_homofits, print_hdr_homofits, read_key_homofits
+  
   public write_wcsimage_fits
 
   public read_xtension_fits, read_bintable_key, read_asctable_fits 
@@ -185,14 +205,270 @@ contains
     call ftclos(unit, status)
     call ftfiou(unit, status)
     if (status > 0) then
-       write(*,*) 'ERROR in write_twod_fits :',errtext
+       write(*,*)'status: ',status
+       call ftgerr(status,errtext)
+       write(*,*)'ERROR in write_twod_fits :',errtext
        STOP
     endif
     
   end subroutine write_twod_fits
 
+  
+  
+  
+  subroutine read_image_fits(filename,values)
+    implicit none
+    character(len=*) :: filename
+    real(fsp), dimension(:,:), allocatable :: values
+
+    
+    integer, dimension(2) :: naxes
+    integer :: status,unit,readwrite,blocksize,nfound
+    integer :: hdutype, group, fpixel, nelements
+
+    real(fsp) :: rnullval = 0._fsp
+    
+    logical :: anyf
 
 
+    if (allocated(values)) then
+       write(*,*)'image array already allocated!'
+       stop 'ERROR in read_image_fits'
+    endif
+    
+    status=0
+    call ftgiou(unit,status)
+    readwrite=0
+    call ftopen(unit,filename,readwrite,blocksize,status)
+
+    call ftghdt(unit,hdutype,status)
+    if (hdutype .ne. 0) then
+       write(*,*)'Fits file is not of image type!'
+       stop 'ERROR in read_image_fits'
+    endif
+    
+    call ftgknj(unit,'NAXIS',1,2,naxes,nfound,status)
+    
+    if (nfound .ne. 2) then
+       write(*,*) 'Failure in reading the NAXIS keywords'
+       stop 'ERROR in read_image_fits'
+    endif
+    group=1
+    fpixel=1
+    nelements=product(naxes)
+    allocate(values(naxes(1),naxes(2)))
+
+    call ftgpve(unit,group,fpixel,nelements,rnullval,values,anyf,status)
+    call ftclos(unit, status)
+    call ftfiou(unit, status)
+    
+    
+  end subroutine read_image_fits
+
+
+  subroutine overwrite_image_fits(filename,values)
+    implicit none
+    character(len=*) :: filename
+    real(fsp), dimension(:,:), allocatable :: values
+
+    
+    integer, dimension(2) :: naxes
+    integer :: status,unit,readwrite,blocksize,nfound
+    integer :: hdutype, group, fpixel, nelements
+    
+
+    if (.not.allocated(values)) then
+       stop 'overwrite_image_fits: no image provided!'
+    endif
+    
+    status=0
+    call ftgiou(unit,status)
+    readwrite=1
+    call ftopen(unit,filename,readwrite,blocksize,status)
+
+    if (status.ne.0) then
+       stop 'overwrite_image_fits: file not found!'
+    endif
+       
+    call ftghdt(unit,hdutype,status)
+    if (hdutype .ne. 0) then
+       write(*,*)'Fits file is not of image type!'
+       stop 'ERROR in overwrite_image_fits'
+    endif
+    
+    call ftgknj(unit,'NAXIS',1,2,naxes,nfound,status)
+    
+    if (nfound .ne. 2) then
+       write(*,*) 'Failure in reading the NAXIS keywords'
+       stop 'ERROR in overwrite_image_fits'
+    endif
+    group=1
+    fpixel=1
+    nelements=product(naxes)
+    if ((naxes(1).ne.size(values,1)).or.(naxes(2).ne.size(values,2))) then
+       write(*,*) 'Overwritting with different image sizes'
+    endif
+    
+    call ftppre(unit,group,fpixel,nelements,values,status)
+    call ftclos(unit, status)
+    call ftfiou(unit, status)
+    
+    
+  end subroutine overwrite_image_fits
+
+
+  
+  subroutine copy_hdr_fits(filein,fileout)
+    implicit none
+    character(len=*) :: filein, fileout
+
+    integer :: status,iunit,ounit
+    integer :: blocksize, ireadwrite, oreadwrite
+    
+    status=0
+    call ftgiou(iunit,status)
+    call ftgiou(ounit,status)
+
+    ireadwrite=0
+    call ftopen(iunit,filein,ireadwrite,blocksize,status)
+    oreadwrite=1
+    call ftinit(ounit,fileout,blocksize,status) 
+    
+    call ftcphd(iunit,ounit,status)
+
+    call ftclos(iunit, status)
+    call ftfiou(iunit, status)
+    call ftclos(ounit, status)
+    call ftfiou(ounit, status)
+    
+  end subroutine copy_hdr_fits
+  
+  
+  
+  subroutine read_kernel_homofits(filename,cube)
+    implicit none
+    character(len=*) :: filename
+    real(fsp), dimension(:,:,:), allocatable :: cube
+
+    
+    integer, dimension(3) :: naxes
+    integer :: status,unit,readwrite,blocksize,nfound
+    integer :: naxis, group, fpixel, nelements
+
+    real(fsp) :: rnullval = 0._fsp
+    
+    logical :: anyf
+
+
+    if (allocated(cube)) then
+       write(*,*)'cube already allocated'
+       stop 'ERROR in read_cube_fits'
+    end if
+
+    status=0
+    call ftgiou(unit,status)
+    readwrite=0
+    call ftopen(unit,filename,readwrite,blocksize,status)
+
+    call ftgidm(unit,naxis,status)
+
+    if (naxis.ne.3) stop 'read_cube_fits: not cubic image!'
+        
+    call ftgisz(unit,naxis,naxes,status)
+       
+    group=1
+    fpixel=1
+    nelements=product(naxes)
+    allocate(cube(naxes(1),naxes(2),naxes(3)))
+
+    call ftg3de(unit,group,rnullval,naxes(1),naxes(2),naxes(1),naxes(2),naxes(3),cube,anyf,status)
+    
+    call ftclos(unit, status)
+    call ftfiou(unit, status)
+    
+    
+  end subroutine read_kernel_homofits
+
+
+  subroutine print_hdr_homofits(filename)
+    implicit none
+    character(len=*), intent(in) :: filename
+    
+    character(len=lenrec) :: record
+    
+
+    integer :: status, unit, blocksize
+    integer :: readwrite
+
+    integer :: ikey
+    integer :: nkeys
+
+   
+    status=0
+    call ftgiou(unit,status)
+
+    readwrite=0
+    call ftopen(unit,filename,readwrite,blocksize,status)
+   
+    call ftghps(unit,nkeys,ikey,status)
+
+    print *,'test',nkeys
+    
+    do ikey=1,nkeys
+       call ftgrec(unit,ikey,record,status)
+       write(*,*) record
+    end do
+
+    call ftclos(unit, status)
+    call ftfiou(unit, status)
+
+    if (status > 0) then
+       write(*,*) 'ERROR in print_hdr_homofits :',status
+       STOP
+    endif
+    
+  end subroutine print_hdr_homofits
+
+
+
+  subroutine read_key_homofits(filename,keyname,keyval)
+    implicit none
+    character(len=*), intent(in) :: filename
+    character(len=*), intent(in) :: keyname
+    real(fsp), intent(out) :: keyval
+
+    character(len=lenrec) :: comment
+    
+
+    integer :: status, unit
+    integer :: readwrite, blocksize
+  
+   
+    status=0
+    call ftgiou(unit,status)
+
+    readwrite=0
+    call ftopen(unit,filename,readwrite,blocksize,status)
+   
+    call ftgkye(unit,keyname,keyval,comment,status)
+   
+    call ftclos(unit, status)
+    call ftfiou(unit, status)
+
+    write(*,*)'read_key_homofits: ', keyname, keyval
+
+    if (status > 0) then
+       write(*,*) 'ERROR in  read_key_homofits:',status
+       STOP
+    endif
+    
+    
+  end subroutine read_key_homofits
+
+
+
+  
+  
   subroutine write_wcsimage_fits(filename,image,wcsheader)
     implicit none
     character(len=*), intent(in) :: filename
