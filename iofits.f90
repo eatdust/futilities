@@ -411,8 +411,6 @@ contains
     call ftopen(unit,filename,readwrite,blocksize,status)
    
     call ftghps(unit,nkeys,ikey,status)
-
-    print *,'test',nkeys
     
     do ikey=1,nkeys
        call ftgrec(unit,ikey,record,status)
@@ -438,7 +436,8 @@ contains
     real(fsp), intent(out) :: keyval
 
     character(len=lenrec) :: comment
-    
+
+    logical, parameter :: display = .false.
 
     integer :: status, unit
     integer :: readwrite, blocksize
@@ -455,7 +454,7 @@ contains
     call ftclos(unit, status)
     call ftfiou(unit, status)
 
-    write(*,*)'read_key_homofits: ', keyname, keyval
+    if (display) write(*,*)'read_key_homofits: ', keyname, keyval
 
     if (status > 0) then
        write(*,*) 'ERROR in  read_key_homofits:',status
