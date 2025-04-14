@@ -48,7 +48,7 @@ module sundials
   type(tcvode) :: cvodedata
 !$omp threadprivate(cvodedata)
   
-  integer(c_long), parameter :: mxsteps = 100000
+  integer(c_long), parameter :: mxsteps = 1000000
    
   public easycvode, stepscvode_nls, stepscvode_ls
   
