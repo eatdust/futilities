@@ -16,7 +16,6 @@ module cuba
 !default minimum and maximum numbers of iteration
   integer(idp), parameter :: minevaldef = 1024
   integer(idp), parameter :: maxevaldef = 1048576
-
   
 !statefile name (empty is no statefile)
   character(len=*), parameter :: statefile=""
@@ -294,6 +293,8 @@ contains
 !number of new integrand evaluations in each subdivision    
     integer, parameter :: nmin = 128
     integer, parameter :: nnew = 16384
+
+    
 !should be large for flat integrand, small for volatile
     real(dp):: flatness
 

@@ -55,19 +55,19 @@ module sundials
 contains
 
 
-  function easycvode(n,cvoderhs,tini,yini,tend,tol)
+  function easycvode(n,cvoderhs,tini,yini,tend,tol,tola)
     implicit none
     include 'sundials.h'
     integer, intent(in) :: n
     real(fdp), intent(in) :: tini
     real(fdp), intent(in) :: tend
-    real(fdp), intent(in), optional :: tol
+    real(fdp), intent(in), optional :: tol,tola
     real(fdp), dimension(n), intent(in) :: yini
     real(fdp), dimension(n) :: easycvode
 
     real(fdp), dimension(n,1) :: output
        
-    output = stepscvode_nls(n,cvoderhs,tini,yini,(/tend/),tol)
+    output = stepscvode_nls(n,cvoderhs,tini,yini,(/tend/),tol,tola)
 
     easycvode = output(1:n,1) 
     
@@ -76,7 +76,7 @@ contains
 
   
 
-  function stepscvode_nls(n,cvoderhs,tini,yini,tend,tol)
+  function stepscvode_nls(n,cvoderhs,tini,yini,tend,tolr,tola)
     implicit none
 
     include 'sundials.h'
@@ -86,7 +86,7 @@ contains
     real(fdp), dimension(:), intent(in) :: tend
     real(fdp), dimension(n), intent(in) :: yini
     real(fdp), dimension(n,size(tend,1)) :: stepscvode_nls
-    real(fdp), intent(in) , optional :: tol
+    real(fdp), intent(in) , optional :: tolr, tola
     
     integer(c_long) :: neq
     real(c_double) :: tstart, tout
@@ -99,17 +99,21 @@ contains
 
     
     
-    real(c_double) :: rtol
-    real(c_double), parameter :: atol = 100._c_double * epsilon(1._c_double)
-  
+    real(c_double) :: rtol, atol
+    
     integer :: i,nsteps
 
-    if (present(tol)) then
-       rtol = real(tol,c_double)
+    if (present(tolr)) then
+       rtol = real(tolr,c_double)
     else
-       rtol = 1d-10
+       rtol = 100000._c_double * epsilon(1._c_double)
     endif
-       
+
+    if (present(tola)) then
+       atol = real(tola,c_double)
+    else
+       atol = 100._c_double * epsilon(1._c_double)
+    endif
     
     neq = int(n,c_long)
     tstart = real(tini,c_double)
