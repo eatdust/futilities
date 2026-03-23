@@ -35,7 +35,6 @@
 
 * wcswrap.c: A C-wrapper to some functions of the **wcslib**, for the fwcs module
 
-
 * iofits: A Fortran interface to some functions of the [**fitsio**](https://heasarc.gsfc.nasa.gov/fitsio/) library.
 
 * iotools: Some wrappers to do debugging and simple I/O in Fortran.
@@ -51,6 +50,10 @@
 * sundials: A module to call the differential equation solvers of the [**sundials**](https://computing.llnl.gov/projects/sundials) library.
 
 * funcutils: A module to do basic derivation (uses bspline) and integration (based in dverk, netlib).
+
+* modetheta.c: A C-wrapper to the elliptic theta function of the **flint** library, for the fflint module
+
+* fflint: An embryonic Fortran interface to some function of the library [**flint**](https://flintlib.org)
 
 ---
 
