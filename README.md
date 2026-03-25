@@ -51,9 +51,9 @@
 
 * funcutils: A module to do basic derivation (uses bspline) and integration (based in dverk, netlib).
 
-* modetheta.c: A C-wrapper to the elliptic theta function of the **flint** library, for the fflint module
+* modtheta.c: A C-wrapper to the elliptic theta functions of the **flint** library, for the fflint module
 
-* fflint: An embryonic Fortran interface to some function of the library [**flint**](https://flintlib.org)
+* fflint: An embryonic Fortran interface to some functions of the library [**flint**](https://flintlib.org)
 
 ---
 

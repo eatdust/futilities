@@ -74,6 +74,7 @@ module fflint
   public free_acb_t, allocate_acb_t, allocated_bytes_acb_t
   public initialize_acb_t_real, initialize_acb_t_cmpx
 
+  public :: ntheta
   public :: elliptic_thetas, deriv_elliptic_thetas
   public :: sine_series, deriv_elliptic_lnthetas
   
@@ -105,8 +106,9 @@ contains
     real(C_DOUBLE), dimension(2), save :: z,tau
     real(C_DOUBLE), dimension(2), save :: t1, t2, t3, t4
 !$omp threadprivate(z,tau,t1,t2,t3,t4)    
-    
-    integer(C_INT) :: prec = 32
+
+!64bits precision 2^(-prec)    
+    integer(C_INT) :: prec = 53
     
     z(1) = real(u/pidp,C_DOUBLE)
     z(2) = real(aimag(u/pidp),C_DOUBLE)
