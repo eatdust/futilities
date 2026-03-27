@@ -76,7 +76,7 @@ module fflint
 
   public :: ntheta
   public :: elliptic_thetas, deriv_elliptic_thetas
-  public :: sine_series, deriv_elliptic_lnthetas
+  public :: lambert_sine_series, deriv_elliptic_lnthetas
   
 contains
 
@@ -98,23 +98,23 @@ contains
   end function f_c_string
 
   
-  function elliptic_thetas(u,q)
+  function elliptic_thetas(u,lnq)
     implicit none
     complex(fdp), dimension(ntheta) :: elliptic_thetas
-    complex(fdp), intent(in) :: u,q
+    complex(fdp), intent(in) :: u,lnq
     
     real(C_DOUBLE), dimension(2), save :: z,tau
     real(C_DOUBLE), dimension(2), save :: t1, t2, t3, t4
 !$omp threadprivate(z,tau,t1,t2,t3,t4)    
 
-!64bits precision 2^(-prec)    
+!64bits precision 2^(-53)
     integer(C_INT) :: prec = 53
     
     z(1) = real(u/pidp,C_DOUBLE)
     z(2) = real(aimag(u/pidp),C_DOUBLE)
 
-    tau(1) = real(aimag(log(q)/pidp),fdp)
-    tau(2) = -real(log(q)/pidp,fdp)
+    tau(1) = real(aimag(lnq/pidp),fdp)
+    tau(2) = -real(lnq/pidp,fdp)
     
     call get_elliptic_thetas(t1,t2,t3,t4,z,tau,prec)
 
@@ -131,9 +131,9 @@ contains
 !   sum(n=1 to infty) of (-1)^n * q^2n/(1-q^2n) * sin(2nu)
 !
 !  
-  function sine_series(u,q,tol)
+  function lambert_sine_series(u,q,tol)
     implicit none
-    complex(fdp), dimension(4) :: sine_series
+    complex(fdp), dimension(4) :: lambert_sine_series
     complex(fdp), intent(in) :: u,q
     real(fdp), intent(in), optional :: tol
 
@@ -151,7 +151,7 @@ contains
        maxerr = epsilon(1._fdp)
     endif
     
-    sine_series = cmplx(0._fdp,0._fdp,fdp)
+    lambert_sine_series = cmplx(0._fdp,0._fdp,fdp)
     abserr = 1._fdp
     
     qn = q
@@ -165,7 +165,7 @@ contains
        term(2) = term(1) * monen
        term(3) = term(4) * monen
 
-       sine_series = sine_series + term
+       lambert_sine_series = lambert_sine_series + term
 
        qn = q*qn
        twonu = twonu + 2._fdp*u
@@ -175,12 +175,12 @@ contains
     end do
 
     if (debug) then
-       write(*,*)'sine_series:'
+       write(*,*)'lambert_sine_series:'
        write(*,*)'counter = ',counter
        write(*,*)'errors  = ',term(1),term(2),term(3),term(4)
     endif
        
-  end function sine_series
+  end function lambert_sine_series
 
     
 !NIST Handbook of Mathematical Functions page 529  
@@ -192,7 +192,7 @@ contains
     complex(fdp) :: tanu
 
     tanu = tan(u)
-    series = sine_series(u,q)
+    series = lambert_sine_series(u,q)
 
     deriv_elliptic_lnthetas(1) = 4._fdp*series(1) + 1._fdp/tanu
     deriv_elliptic_lnthetas(2) = 4._fdp*series(2) - tanu
@@ -203,14 +203,14 @@ contains
 
   
 
-  function deriv_elliptic_thetas(u,q)    
+  function deriv_elliptic_thetas(u,lnq)    
     implicit none
     complex(fdp), dimension(ntheta) :: deriv_elliptic_thetas
-    complex(fdp), intent(in) :: u,q
+    complex(fdp), intent(in) :: u,lnq
 
     complex(fdp), dimension(ntheta) :: dlnthetas, thetas
 
-    deriv_elliptic_thetas = elliptic_thetas(u,q) * deriv_elliptic_lnthetas(u,q)
+    deriv_elliptic_thetas = elliptic_thetas(u,lnq) * deriv_elliptic_lnthetas(u,exp(lnq))
     
   end function deriv_elliptic_thetas
 
