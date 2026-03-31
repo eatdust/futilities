@@ -4,21 +4,20 @@ module sundials
   use, intrinsic :: iso_c_binding
   use precision, only : fdp
 
-  use fsundials_context_mod
+  use fcvodes_mod
+  use fsundials_core_mod
 
-  use fcvode_mod
-
-  use fsundials_nvector_mod
   use fnvector_serial_mod
-
-  use fsunlinsol_dense_mod
-  use fsundials_linearsolver_mod
+#ifdef SUNOPENMP
+  use fnvector_openmp_mod
+#endif  
   
-  use fsundials_nonlinearsolver_mod
+  use fsunlinsol_dense_mod
   use fsunnonlinsol_fixedpoint_mod
+  use fsunnonlinsol_newton_mod
 
   use fsunmatrix_dense_mod
-  use fsundials_matrix_mod
+
   
   implicit none
 
@@ -34,7 +33,6 @@ module sundials
      type(SUNMatrix), pointer :: matA
      type(SUNLinearSolver), pointer :: ls 
      type(SUNNonlinearSolver), pointer :: nls
-
   end type fsun
 
 
@@ -44,18 +42,24 @@ module sundials
      procedure(cvodejac), pointer, nopass :: ptr_jac => null()
   end type tcvode
 
-  
-  type(tcvode) :: cvodedata
+  integer :: inst
+  integer, parameter :: ninstmax = 3
+  type(tcvode), dimension(ninstmax) :: cvodedata
 !$omp threadprivate(cvodedata)
   
   integer(c_long), parameter :: mxsteps = 1000000
-   
-  public easycvode, stepscvode_nls, stepscvode_ls
+
+#ifdef SUNOPENMP  
+  integer, parameter :: nthreads = 2
+#endif
+  
+  public easycvode, easycvquad
+  public stepscvode_nls, stepscvode_ls
   
 contains
 
-
-  function easycvode(n,cvoderhs,tini,yini,tend,tol,tola)
+!non-linear solver
+  function easycvode(n,cvoderhs,tini,yini,tend,tol,tola,setinst)
     implicit none
     include 'sundials.h'
     integer, intent(in) :: n
@@ -63,15 +67,51 @@ contains
     real(fdp), intent(in) :: tend
     real(fdp), intent(in), optional :: tol,tola
     real(fdp), dimension(n), intent(in) :: yini
+    integer, intent(in), optional :: setinst
     real(fdp), dimension(n) :: easycvode
 
     real(fdp), dimension(n,1) :: output
+
+    if (present(setinst)) then
+       if (setinst.gt.ninstmax) stop 'easycvode: setinst > ninstmax!'
+       inst = setinst
+    else
+       inst = 1
+    endif
        
     output = stepscvode_nls(n,cvoderhs,tini,yini,(/tend/),tol,tola)
-
+    
     easycvode = output(1:n,1) 
     
   end function easycvode
+
+
+!linear solver with vanishing jacobian  
+  function easycvquad(n,cvoderhs,tini,yini,tend,tol,tola,setinst)
+    implicit none
+    include 'sundials.h'
+    integer, intent(in) :: n
+    real(fdp), intent(in) :: tini
+    real(fdp), intent(in) :: tend
+    real(fdp), intent(in), optional :: tol,tola
+    real(fdp), dimension(n), intent(in) :: yini
+    integer, intent(in), optional :: setinst
+    real(fdp), dimension(n) :: easycvquad
+
+    real(fdp), dimension(n,1) :: output
+
+    if (present(setinst)) then
+       if (setinst.gt.ninstmax) stop 'easycvquad: setinst > ninstmax!'
+       inst = setinst
+    else
+       inst = 1
+    endif
+
+    output = stepscvode_ls(n,cvoderhs,nulljac,tini,yini,(/tend/),tol,tola)
+
+    easycvquad = output(1:n,1) 
+
+  end function easycvquad
 
 
   
@@ -96,9 +136,7 @@ contains
     type(fsun) :: sun
 
     integer(c_int) :: ierr
-
-    
-    
+        
     real(c_double) :: rtol, atol
     
     integer :: i,nsteps
@@ -121,21 +159,28 @@ contains
 
     nsteps = size(tend,1)
 
-!context creation (sundials >= 6.0)
-    ierr = FSUNContext_Create(c_null_ptr,sun%ctx)
+!context creation (sundials >= 7.0)
+    ierr = FSUNContext_Create(SUN_COMM_NULL,sun%ctx)
     if (ierr.ne.0) stop 'error in sunctx creation!'
     
 !initialize module procedure pointer
-    cvodedata%ndim = neq
-    cvodedata%ptr_rhs => cvoderhs
+    cvodedata(inst)%ndim = neq
+    cvodedata(inst)%ptr_rhs => cvoderhs
     
 !create sundial vect (yvec is target)
-    sun%vecY => FN_VMake_Serial(neq,yvec,sun%ctx)
-
+#ifndef SUNOPENMP
+    sun%vecY => FN_VMake_Serial(neq, yvec, sun%ctx)
+#else
+    sun%vecY => FN_VMake_OpenMP(neq, yvec, nthreads, sun%ctx)
+#endif
+    
+    
 
 !allocate CVode solver (ADAMS method or BDF for stiff)
     sun%mem = FCVodeCreate(CV_ADAMS ,sun%ctx)
 
+!default is 12 for adams, 5 for bdf
+!    ierr = FCVodeSetMaxOrd(sun%mem,8)
     
 !initialization
     ierr = FCVodeInit(sun%mem, c_funloc(cvode_rhs), tstart, sun%vecY)
@@ -165,6 +210,12 @@ contains
        stop ' stepscvode_nls: cannot attach non-linear solver'
     endif
 
+!default is 3
+!    ierr = FCVodeSetMaxNonlinIters(sun%mem,3)
+    
+!null pointer to userdata as we don't use it
+    ierr = FCVodeSetUserData(sun%mem, c_null_ptr)
+    
 !solving, tcur is overwritten by tout, possibly allowing for multiple
 !steps
     tcur = tstart
@@ -184,15 +235,20 @@ contains
     enddo
     
 !freeing        
-    cvodedata%ndim = 0
-    cvodedata%ptr_rhs => null()
+    cvodedata(inst)%ndim = 0
+    cvodedata(inst)%ptr_rhs => null()
     
     call FCVodeFree(sun%mem)
+    sun%mem = c_null_ptr
     ierr = FSUNNonLinSolFree(sun%nls)
+    sun%nls => null()
     call FN_VDestroy(sun%vecY)
-
+    sun%vecY => null()
+    
+    
 !delete context    
     ierr = FSUNContext_Free(sun%ctx)
+    sun%ctx = c_null_ptr
     
   end function stepscvode_nls
   
@@ -200,7 +256,7 @@ contains
 
 
 
-  function stepscvode_ls(n,cvoderhs,cvodejac,tini,yini,tend)
+  function stepscvode_ls(n,cvoderhs,cvodejac,tini,yini,tend,tolr,tola)
     implicit none
 
     include 'sundials.h'
@@ -209,23 +265,35 @@ contains
     real(fdp), intent(in) :: tini
     real(fdp), dimension(:), intent(in) :: tend
     real(fdp), dimension(n), intent(in) :: yini
+    real(fdp), intent(in) , optional :: tolr, tola
     real(fdp), dimension(n,size(tend,1)) :: stepscvode_ls
     
     integer(c_long) :: neq
     real(c_double) :: tstart, tout
     real(c_double), dimension(1) :: tcur
     real(c_double), dimension(n) :: yvec
-
+    
     type(fsun) :: sun
 
     integer(c_int) :: ierr
     
     
-    real(c_double), parameter :: rtol = 1d-10
-    real(c_double), parameter :: atol = 100._c_double * epsilon(1._c_double)
+    real(c_double) :: rtol
+    real(c_double) :: atol
   
-    integer :: i,nsteps
-    
+    integer :: i,nsteps, nthreads
+        
+    if (present(tolr)) then
+       rtol = real(tolr,c_double)
+    else
+       rtol = 100000._c_double * epsilon(1._c_double)
+    endif
+
+    if (present(tola)) then
+       atol = real(tola,c_double)
+    else
+       atol = 100._c_double * epsilon(1._c_double)
+    endif
     
     neq = int(n,c_long)
     tstart = real(tini,c_double)
@@ -234,17 +302,21 @@ contains
     nsteps = size(tend,1)
     
 !initialize module procedure pointer
-    cvodedata%ndim = neq
-    cvodedata%ptr_rhs => cvoderhs
-    cvodedata%ptr_jac => cvodejac
+    cvodedata(inst)%ndim = neq
+    cvodedata(inst)%ptr_rhs => cvoderhs
+    cvodedata(inst)%ptr_jac => cvodejac
 
-!context creation (sundials >= 6.0)
-    ierr = FSUNContext_Create(c_null_ptr,sun%ctx)
+!context creation (sundials >= 7.0)
+    ierr = FSUNContext_Create(SUN_COMM_NULL,sun%ctx)
     if (ierr.ne.0) stop 'error in sunctx creation!'
     
 !create sundial vect (yvec is target)
+#ifndef SUNOPENMP
     sun%vecY => FN_VMake_Serial(neq, yvec, sun%ctx)
-
+#else
+    sun%vecY => FN_VMake_OpenMP(neq, yvec, nthreads, sun%ctx)
+#endif
+    
 !create a dense matrix
     sun%matA => FSUNDenseMatrix(neq, neq, sun%ctx)
 
@@ -253,6 +325,9 @@ contains
     
 !allocate CVode solver (ADAMS method or BDF for stiff)
     sun%mem = FCVodeCreate(CV_ADAMS, sun%ctx)
+
+!default is 12 for adams, 5 for bdf
+!    ierr = FCVodeSetMaxOrd(sun%mem,8)
     
 !initialization
     ierr = FCVodeInit(sun%mem, c_funloc(cvode_rhs), tstart, sun%vecY)
@@ -278,6 +353,9 @@ contains
        stop ' stepscvode_ls: cannot attach linear solver'
     endif
 
+!null pointer to userdata as we don't use it
+    ierr = FCVodeSetUserData(sun%mem, c_null_ptr)
+    
 !set the Jacobian routine
     ierr = FCVodeSetJacFn(sun%mem, c_funloc(cvode_jac))
   
@@ -301,16 +379,21 @@ contains
     enddo
     
 !freeing        
-    cvodedata%ndim = 0
-    cvodedata%ptr_rhs => null()
+    cvodedata(inst)%ndim = 0
+    cvodedata(inst)%ptr_rhs => null()
     
     call FCVodeFree(sun%mem)
+    sun%mem = c_null_ptr
     ierr = FSUNLinSolFree(sun%ls)
+    sun%ls => null()
     call FSUNMatDestroy(sun%matA)
+    sun%matA => null()
     call FN_VDestroy(sun%vecY)
-
+    sun%vecY => null()
+    
 !delete context    
     ierr = FSUNContext_Free(sun%ctx)
+    sun%ctx = c_null_ptr
     
   end function stepscvode_ls
   
@@ -320,53 +403,68 @@ contains
 
 
   
-  function cvode_rhs(t,y,f,userdata) bind(C,name='RhsFn')
+  function cvode_rhs(t,y,f,userdata) bind(C,name='CVRhsFn')
     implicit none
     integer(c_int) :: cvode_rhs
 
     real(c_double), value :: t
     type(N_Vector) :: y, f
-    type(c_ptr), value :: userdata
-
+    type(c_ptr) :: userdata
+    
     real(c_double), dimension(:), pointer :: yvec
     real(c_double), dimension(:), pointer :: fvec
-        
+
     yvec => FN_VGetArrayPointer(y)
     fvec => FN_VGetArrayPointer(f)
     
-    fvec = cvodedata%ptr_rhs(cvodedata%ndim,t,yvec)
+    fvec = cvodedata(inst)%ptr_rhs(cvodedata(inst)%ndim,t,yvec)
 
 !success return value    
     cvode_rhs = 0    
 
   end function cvode_rhs
 
-
   
-  function cvode_jac(t,y,f,dfody,userdata,tmp1,tmp2,tmp3) bind(C,name='JacFn')
+  function cvode_jac(t,y,f,dfody,userdata,tmp1,tmp2,tmp3) bind(C,name='CVJacFn')
     implicit none
     integer(c_int) :: cvode_jac
 
     real(c_double), value :: t
     type(N_Vector) :: y, f
     type(SUNMatrix) :: dfody
-    type(c_ptr), value :: userdata
+    type(c_ptr), pointer :: userdata
     type(N_Vector) :: tmp1, tmp2, tmp3
     
     real(c_double), dimension(:), pointer :: yvec
     real(c_double), dimension(:), pointer :: fvec
     real(c_double), dimension(:), pointer :: jmat
-        
+
     yvec => FN_VGetArrayPointer(y)
     fvec => FN_VGetArrayPointer(f)
     jmat =>  FSUNDenseMatrix_Data(dfody)
 
 !to be checked and debugged, should be column-major ordering (fortran standard)
-    jmat = cvodedata%ptr_jac(cvodedata%ndim,t,yvec,fvec)
+    jmat = cvodedata(inst)%ptr_jac(cvodedata(inst)%ndim,t,yvec,fvec)
 
     cvode_jac = 0    
 
   end function cvode_jac
-  
+
+
+
+!for test and easy quadrature  
+  function nulljac(n,t,y,f)
+    use precision, only : fdp
+    implicit none
+    integer, intent(in) :: n
+    real(fdp), intent(in) :: t
+    real(fdp), dimension(n), intent(in) :: y,f
+    real(fdp), dimension(n*n) :: nulljac
+
+    nulljac = 0._fdp
+
+  end function nulljac
+
+
   
 end module sundials
