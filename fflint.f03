@@ -184,15 +184,16 @@ contains
 
     
 !NIST Handbook of Mathematical Functions page 529  
-  function deriv_elliptic_lnthetas(u,q)
+  function deriv_elliptic_lnthetas(u,q,tol)
     complex(fdp), dimension(ntheta) :: deriv_elliptic_lnthetas
     complex(fdp), intent(in) :: u,q
-
+    real(fdp), intent(in), optional :: tol
+    
     complex(fdp), dimension(4) :: series
     complex(fdp) :: tanu
 
     tanu = tan(u)
-    series = lambert_sine_series(u,q)
+    series = lambert_sine_series(u,q,tol)
 
     deriv_elliptic_lnthetas(1) = 4._fdp*series(1) + 1._fdp/tanu
     deriv_elliptic_lnthetas(2) = 4._fdp*series(2) - tanu
@@ -203,14 +204,15 @@ contains
 
   
 
-  function deriv_elliptic_thetas(u,lnq)    
+  function deriv_elliptic_thetas(u,lnq,tol)    
     implicit none
     complex(fdp), dimension(ntheta) :: deriv_elliptic_thetas
     complex(fdp), intent(in) :: u,lnq
-
+    real(fdp), intent(in), optional :: tol
+    
     complex(fdp), dimension(ntheta) :: dlnthetas, thetas
 
-    deriv_elliptic_thetas = elliptic_thetas(u,lnq) * deriv_elliptic_lnthetas(u,exp(lnq))
+    deriv_elliptic_thetas = elliptic_thetas(u,lnq) * deriv_elliptic_lnthetas(u,exp(lnq),tol)
     
   end function deriv_elliptic_thetas
 
