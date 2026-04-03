@@ -277,7 +277,7 @@ contains
   function stepscvode_ls(n,cvoderhs,cvodejac,tini,yini,tend,tolr,tola)
 #ifdef MPI
     use mpi
-#endinf    
+#endif 
     implicit none
 
     include 'sundials.h'
