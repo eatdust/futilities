@@ -42,24 +42,49 @@ module sundials
      procedure(cvodejac), pointer, nopass :: ptr_jac => null()
   end type tcvode
 
-  integer :: inst
+  
+  integer, save :: inst = 1
+!$omp threadprivate(inst)
+  
   integer, parameter :: ninstmax = 3
   type(tcvode), dimension(ninstmax) :: cvodedata
 !$omp threadprivate(cvodedata)
   
-  integer(c_long), parameter :: mxsteps = 1000000
+  integer(c_long), parameter :: mxsteps = 10000000
 
 #ifdef SUNOPENMP  
   integer, parameter :: nthreads = 2
 #endif
   
   public easycvode, easycvquad
+  public cvode_set_instance, cvode_get_instance
   public stepscvode_nls, stepscvode_ls
   
 contains
 
+
+  subroutine cvode_set_instance(setinst)
+    implicit none
+    integer, intent(in) :: setinst
+    
+    if (setinst.gt.ninstmax) stop 'set_instance: setinst > ninstmax!'
+
+    inst = setinst
+
+  end subroutine cvode_set_instance
+
+
+  function cvode_get_instance()
+    implicit none
+    integer :: cvode_get_instance
+
+    cvode_get_instance = inst
+
+  end function  cvode_get_instance
+  
+  
 !non-linear solver
-  function easycvode(n,cvoderhs,tini,yini,tend,tol,tola,setinst)
+  function easycvode(n,cvoderhs,tini,yini,tend,tol,tola)
     implicit none
     include 'sundials.h'
     integer, intent(in) :: n
@@ -67,17 +92,9 @@ contains
     real(fdp), intent(in) :: tend
     real(fdp), intent(in), optional :: tol,tola
     real(fdp), dimension(n), intent(in) :: yini
-    integer, intent(in), optional :: setinst
     real(fdp), dimension(n) :: easycvode
 
     real(fdp), dimension(n,1) :: output
-
-    if (present(setinst)) then
-       if (setinst.gt.ninstmax) stop 'easycvode: setinst > ninstmax!'
-       inst = setinst
-    else
-       inst = 1
-    endif
        
     output = stepscvode_nls(n,cvoderhs,tini,yini,(/tend/),tol,tola)
     
@@ -87,7 +104,7 @@ contains
 
 
 !linear solver with vanishing jacobian  
-  function easycvquad(n,cvoderhs,tini,yini,tend,tol,tola,setinst)
+  function easycvquad(n,cvoderhs,tini,yini,tend,tol,tola)
     implicit none
     include 'sundials.h'
     integer, intent(in) :: n
@@ -95,17 +112,9 @@ contains
     real(fdp), intent(in) :: tend
     real(fdp), intent(in), optional :: tol,tola
     real(fdp), dimension(n), intent(in) :: yini
-    integer, intent(in), optional :: setinst
     real(fdp), dimension(n) :: easycvquad
 
     real(fdp), dimension(n,1) :: output
-
-    if (present(setinst)) then
-       if (setinst.gt.ninstmax) stop 'easycvquad: setinst > ninstmax!'
-       inst = setinst
-    else
-       inst = 1
-    endif
 
     output = stepscvode_ls(n,cvoderhs,nulljac,tini,yini,(/tend/),tol,tola)
 
@@ -117,6 +126,9 @@ contains
   
 
   function stepscvode_nls(n,cvoderhs,tini,yini,tend,tolr,tola)
+#ifdef MPI
+    use mpi
+#endif    
     implicit none
 
     include 'sundials.h'
@@ -160,7 +172,12 @@ contains
     nsteps = size(tend,1)
 
 !context creation (sundials >= 7.0)
+#ifndef MPI
     ierr = FSUNContext_Create(SUN_COMM_NULL,sun%ctx)
+#else
+    ierr = FSUNContext_Create(MPI_COMM_NULL,sun%ctx)
+#endif    
+
     if (ierr.ne.0) stop 'error in sunctx creation!'
     
 !initialize module procedure pointer
@@ -197,6 +214,7 @@ contains
 
 !default is 500    
     ierr = FCVodeSetMaxNumSteps(sun%mem,mxsteps)
+
     
 !create a non-linear solver    
     sun%nls => FSUNNonlinSol_FixedPoint(sun%vecY, 0, sun%ctx)
@@ -257,6 +275,9 @@ contains
 
 
   function stepscvode_ls(n,cvoderhs,cvodejac,tini,yini,tend,tolr,tola)
+#ifdef MPI
+    use mpi
+#endinf    
     implicit none
 
     include 'sundials.h'
@@ -307,7 +328,11 @@ contains
     cvodedata(inst)%ptr_jac => cvodejac
 
 !context creation (sundials >= 7.0)
+#ifndef MPI
     ierr = FSUNContext_Create(SUN_COMM_NULL,sun%ctx)
+#else
+    ierr = FSUNContext_Create(MPI_COMM_NULL,sun%ctx)
+#endif    
     if (ierr.ne.0) stop 'error in sunctx creation!'
     
 !create sundial vect (yvec is target)
