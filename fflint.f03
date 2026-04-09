@@ -21,6 +21,7 @@ module fflint
   implicit none
 
   private
+
   
   interface
 
@@ -64,8 +65,51 @@ module fflint
        integer(C_INT), value :: prec
      end subroutine get_elliptic_thetas
      
+     function arb_fpwrap_double_exp_integral_ei(res,x,flags) bind(C)
+       import C_INT, C_DOUBLE
+       integer(C_INT) :: arb_fpwrap_double_exp_integral_ei
+       real(C_DOUBLE) :: res
+       real(C_DOUBLE), value :: x
+       integer(C_INT), value :: flags
+     end function arb_fpwrap_double_exp_integral_ei
+
+     function arb_fpwrap_cdouble_exp_integral_ei(res,x,flags) bind(C)
+       import C_INT, C_DOUBLE
+       integer(C_INT) :: arb_fpwrap_cdouble_exp_integral_ei
+       complex(C_DOUBLE) :: res
+       complex(C_DOUBLE), value :: x
+       integer(C_INT), value :: flags
+     end function arb_fpwrap_cdouble_exp_integral_ei     
+
+     function arb_fpwrap_double_exp_integral_e(res,s,x,flags) bind(C)
+       import C_INT, C_DOUBLE
+       integer(C_INT) :: arb_fpwrap_double_exp_integral_e
+       real(C_DOUBLE) :: res
+       real(C_DOUBLE), value :: s,x
+       integer(C_INT), value :: flags
+     end function arb_fpwrap_double_exp_integral_e
+
+     function arb_fpwrap_cdouble_exp_integral_e(res,s,x,flags) bind(C)
+       import C_INT, C_DOUBLE
+       integer(C_INT) :: arb_fpwrap_cdouble_exp_integral_e
+       complex(C_DOUBLE) :: res
+       complex(C_DOUBLE), value :: s,x
+       integer(C_INT), value :: flags
+     end function arb_fpwrap_cdouble_exp_integral_e    
+
+
+     
   end interface
 
+  interface exp_integral_ei
+     procedure arb_fpwrap_cdouble_exp_integral_ei, arb_fpwrap_double_exp_integral_ei
+  end interface exp_integral_ei
+
+    interface exp_integral_en
+     procedure arb_fpwrap_cdouble_exp_integral_e, arb_fpwrap_double_exp_integral_e
+  end interface exp_integral_en
+
+  
   integer, parameter :: ntheta = 4
 
   logical, parameter :: display = .false.
@@ -74,7 +118,7 @@ module fflint
   public free_acb_t, allocate_acb_t, allocated_bytes_acb_t
   public initialize_acb_t_real, initialize_acb_t_cmpx
 
-  public :: ntheta
+  public :: ntheta, exp_integral_ei, exp_integral_en
   public :: elliptic_thetas, deriv_elliptic_thetas
   public :: lambert_sine_series, deriv_elliptic_lnthetas
   
