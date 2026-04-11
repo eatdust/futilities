@@ -210,7 +210,7 @@ contains
        term(3) = term(4) * monen
 
        lambert_sine_series = lambert_sine_series + term
-
+       
        qn = q*qn
        twonu = twonu + 2._fdp*u
        monen = -monen
@@ -221,6 +221,7 @@ contains
     if (debug) then
        write(*,*)'lambert_sine_series:'
        write(*,*)'counter = ',counter
+       write(*,*)'u =   q = ',u,q
        write(*,*)'errors  = ',term(1),term(2),term(3),term(4)
     endif
        
@@ -228,23 +229,46 @@ contains
 
     
 !NIST Handbook of Mathematical Functions page 529  
-  function deriv_elliptic_lnthetas(u,q,tol)
-    complex(fdp), dimension(ntheta) :: deriv_elliptic_lnthetas
-    complex(fdp), intent(in) :: u,q
+  recursive function deriv_elliptic_lnthetas(u,lnq,tol) result(dlnthetas)
+    complex(fdp), dimension(ntheta) :: dlnthetas, dlntasthe
+    complex(fdp), intent(in) :: u,lnq
     real(fdp), intent(in), optional :: tol
+
+    complex(fdp), parameter :: ipi = cmplx(0._fdp,pidp,fdp)
+    complex(fdp), parameter :: pi2 = pidp*pidp
     
     complex(fdp), dimension(4) :: series
-    complex(fdp) :: tanu
+    complex(fdp) :: uolnq,tanu,q
 
+    real(fdp), parameter :: toosmall = 0.25_fdp
+
+
+    if (abs(lnq).le.toosmall) then
+       uolnq = u/lnq
+       if (abs(aimag(uolnq*ipi)).lt.real(-pidp/lnq,fdp)) then
+          dlntasthe = -ipi/lnq * deriv_elliptic_lnthetas(-uolnq*ipi,pi2/lnq,tol) &
+               + 2._fdp*uolnq
+          dlnthetas(1) = dlntasthe(1)
+          dlnthetas(2) = dlntasthe(4)
+          dlnthetas(3) = dlntasthe(3)
+          dlnthetas(4) = dlntasthe(2)
+          return
+       endif
+    endif
+    
+    
     tanu = tan(u)
-    series = lambert_sine_series(u,q,tol)
-
-    deriv_elliptic_lnthetas(1) = 4._fdp*series(1) + 1._fdp/tanu
-    deriv_elliptic_lnthetas(2) = 4._fdp*series(2) - tanu
-    deriv_elliptic_lnthetas(3) = 4._fdp*series(3)
-    deriv_elliptic_lnthetas(4) = 4._fdp*series(4)
+    series = lambert_sine_series(u,exp(lnq),tol)
+    
+    dlnthetas(1) = 4._fdp*series(1) + 1._fdp/tanu
+    dlnthetas(2) = 4._fdp*series(2) - tanu
+    dlnthetas(3) = 4._fdp*series(3)
+    dlnthetas(4) = 4._fdp*series(4)
         
   end function deriv_elliptic_lnthetas
+
+
+  
 
   
 
@@ -256,7 +280,7 @@ contains
     
     complex(fdp), dimension(ntheta) :: dlnthetas, thetas
 
-    deriv_elliptic_thetas = elliptic_thetas(u,lnq) * deriv_elliptic_lnthetas(u,exp(lnq),tol)
+    deriv_elliptic_thetas = elliptic_thetas(u,lnq) * deriv_elliptic_lnthetas(u,lnq,tol)
     
   end function deriv_elliptic_thetas
 
