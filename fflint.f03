@@ -118,9 +118,13 @@ module fflint
   public free_acb_t, allocate_acb_t, allocated_bytes_acb_t
   public initialize_acb_t_real, initialize_acb_t_cmpx
 
+!from flint  
   public :: ntheta, exp_integral_ei, exp_integral_en
   public :: elliptic_thetas, deriv_elliptic_thetas
+
+!brute force series  
   public :: lambert_sine_series, deriv_elliptic_lnthetas
+  public :: elliptic_thetas_fourier_series, deriv_elliptic_thetas_fourier_series
   
 contains
 
@@ -149,7 +153,7 @@ contains
     
     real(C_DOUBLE), dimension(2), save :: z,tau
     real(C_DOUBLE), dimension(2), save :: t1, t2, t3, t4
-!$omp threadprivate(z,tau,t1,t2,t3,t4)    
+!$omp threadprivate(z,tau,t1,t2,t3,t4)
 
 !64bits precision 2^(-53)
     integer(C_INT) :: prec = 53
@@ -196,6 +200,7 @@ contains
     endif
     
     lambert_sine_series = cmplx(0._fdp,0._fdp,fdp)
+    term = cmplx(0._fdp,0._fdp,fdp)
     abserr = 1._fdp
     
     qn = q
@@ -208,7 +213,7 @@ contains
        term(1) = term(4)*qn
        term(2) = term(1) * monen
        term(3) = term(4) * monen
-
+       
        lambert_sine_series = lambert_sine_series + term
        
        qn = q*qn
@@ -228,7 +233,7 @@ contains
   end function lambert_sine_series
 
     
-!NIST Handbook of Mathematical Functions page 529  
+!NIST Handbook of Mathematical Functions page 529
   recursive function deriv_elliptic_lnthetas(u,lnq,tol) result(dlnthetas)
     complex(fdp), dimension(ntheta) :: dlnthetas, dlntasthe
     complex(fdp), intent(in) :: u,lnq
@@ -268,21 +273,210 @@ contains
   end function deriv_elliptic_lnthetas
 
 
-  
-
-  
-
+    
   function deriv_elliptic_thetas(u,lnq,tol)    
     implicit none
     complex(fdp), dimension(ntheta) :: deriv_elliptic_thetas
     complex(fdp), intent(in) :: u,lnq
-    real(fdp), intent(in), optional :: tol
-    
-    complex(fdp), dimension(ntheta) :: dlnthetas, thetas
+    real(fdp), intent(in), optional :: tol    
 
     deriv_elliptic_thetas = elliptic_thetas(u,lnq) * deriv_elliptic_lnthetas(u,lnq,tol)
     
   end function deriv_elliptic_thetas
 
+  
+
+
+!direct calculation of thetas by fourier series  
+  recursive function elliptic_thetas_fourier_series(u,lnq,tol) result(thetas)
+    implicit none
+    complex(fdp), intent(in) :: u,lnq
+    real(fdp), intent(in), optional :: tol
+    
+    complex(fdp), dimension(ntheta) :: thetas, tasthe
+    
+    real(fdp) :: twon, twonm1, n2, nmhalf2, monen
+    real(fdp) :: abserr, maxerr
+    
+    complex(fdp) :: uolnq, sqrpiolnq
+    complex(fdp) :: i2nm1u,i2nu
+    complex(fdp) :: exp2nm1plus,exp2nm1minus,exp2nplus,exp2nminus
+
+    complex(fdp), dimension(4) :: term
+
+    real(fdp), parameter :: pi2 = pidp*pidp
+    complex(fdp), parameter :: i = cmplx(0._fdp,1._fdp)
+    complex(fdp), parameter :: ipi = cmplx(0._fdp,pidp)
+    
+    real(fdp), parameter :: logeps = log(epsilon(0._fdp))
+    real(fdp), parameter :: toosmall = 0.25_fdp
+
+    logical, parameter :: debug = .false.
+    
+    integer :: n
+        
+
+    if (abs(lnq).le.toosmall) then
+       uolnq = u/lnq
+       sqrpiolnq = sqrt(-pidp/lnq)
+       
+       tasthe = exp(u*uolnq) * elliptic_thetas_fourier_series(-uolnq*ipi,pi2/lnq,tol)
+       
+       thetas(1) = -i*sqrpiolnq*tasthe(1)
+       thetas(2) = sqrpiolnq*tasthe(4)
+       thetas(3) = sqrpiolnq*tasthe(3)
+       thetas(4) = sqrpiolnq*tasthe(2)       
+       return
+    endif
+            
+    if (present(tol)) then
+       maxerr = tol
+    else
+       maxerr = epsilon(1._fdp)
+    endif
+
+    thetas = cmplx(0._fdp,0._fdp,fdp)
+    abserr = 1._fdp
+    
+    n = 0
+
+    do while (abserr.gt.maxerr)
+       n = n+1
+       twon = n + n
+       twonm1 = twon - 1
+       n2 = n*n
+       nmhalf2 = n2 + 0.25_fdp - n
+       monen = (-1)**n
+
+       i2nm1u = twonm1*u*i
+       i2nu = twon*u*i
+       exp2nm1plus = exp(nmhalf2*lnq + i2nm1u)
+       exp2nm1minus = exp(nmhalf2*lnq - i2nm1u)
+       exp2nplus = exp(n2*lnq + i2nu)
+       exp2nminus = exp(n2*lnq - i2nu)
+
+       term(1) = monen * (exp2nm1plus - exp2nm1minus)
+       term(2) = exp2nm1plus + exp2nm1minus
+       term(3) = exp2nplus + exp2nminus
+       term(4) = monen * (exp2nplus + exp2nminus)
+
+       thetas = thetas + term
+
+       abserr = maxval(abs(term))
+       
+    end do
+    
+    thetas(1) = -thetas(1)/i
+    thetas(3) = 1._fdp + thetas(3)
+    thetas(4) = 1._fdp + thetas(4)
+       
+    if (debug) then
+       write(*,*)'elliptic_thetas_fourier_series'
+       write(*,*)'u = lnq = ',u,lnq
+       write(*,*)'errors  = ',term
+       write(*,*)'thetas  = ',thetas
+    endif
+    
+  end function elliptic_thetas_fourier_series
+
+!direct calculation of d(thetas)/du by fourier series  
+  recursive function deriv_elliptic_thetas_fourier_series(u,lnq,tol) result(dthetas)
+    implicit none
+    complex(fdp), intent(in) :: u,lnq
+    real(fdp), intent(in), optional :: tol
+    
+    complex(fdp), dimension(ntheta) :: dthetas
+    
+    real(fdp) :: twon, twonm1, n2, nmhalf2, monen
+    real(fdp) :: abserr, maxerr
+    
+    complex(fdp) :: uolnq, twouoipi, piolnqthreehalfexpu2olnq
+    complex(fdp) :: i2nm1u,i2nu
+    complex(fdp) :: exp2nm1plus,exp2nm1minus,exp2nplus,exp2nminus
+    
+    complex(fdp), dimension(4) :: dterm
+
+    real(fdp), parameter :: pi2 = pidp*pidp
+    complex(fdp), parameter :: i = cmplx(0._fdp,1._fdp)
+    complex(fdp), parameter :: ipi = cmplx(0._fdp,pidp)
+    
+    real(fdp), parameter :: logeps = log(epsilon(0._fdp))
+    real(fdp), parameter :: toosmall = 0.25_fdp
+    complex(fdp), dimension(ntheta) :: thetas, dtasthe
+
+    logical, parameter :: debug = .false.
+    
+    integer :: n
+
+
+    if (abs(lnq).le.toosmall) then
+       uolnq = u/lnq
+       twouoipi = 2._fdp*u/ipi
+       piolnqthreehalfexpu2olnq = sqrt(-pidp/lnq)*(-pidp/lnq) * exp(u*uolnq)
+       thetas = elliptic_thetas_fourier_series(-uolnq*ipi,pi2/lnq,tol)
+       dtasthe = deriv_elliptic_thetas_fourier_series(-uolnq*ipi,pi2/lnq,tol)
+
+       dthetas(1) = piolnqthreehalfexpu2olnq * ( dtasthe(1) - thetas(1)*twouoipi )
+       dthetas(2) = piolnqthreehalfexpu2olnq * ( dtasthe(4) - thetas(4)*twouoipi ) * i
+       dthetas(3) = piolnqthreehalfexpu2olnq * ( dtasthe(3) - thetas(3)*twouoipi ) * i
+       dthetas(4) = piolnqthreehalfexpu2olnq * ( dtasthe(2) - thetas(2)*twouoipi ) * i
+       return
+    endif
+
+    if (present(tol)) then
+       maxerr = tol
+    else
+       maxerr = epsilon(1._fdp)
+    endif
+    
+
+    dthetas = cmplx(0._fdp,0._fdp,fdp)
+    abserr = 1._fdp
+    
+    n = 0
+    
+    do while (abserr.gt.maxerr)
+       n = n + 1
+       twon = n + n
+       twonm1 = twon - 1
+       n2 = n*n
+       nmhalf2 = n2 + 0.25_fdp - n
+       monen = (-1)**n
+
+       i2nm1u = twonm1*u*i
+       i2nu = twon*u*i
+       exp2nm1plus = exp(nmhalf2*lnq + i2nm1u)
+       exp2nm1minus = exp(nmhalf2*lnq - i2nm1u)
+       exp2nplus = exp(n2*lnq + i2nu)
+       exp2nminus = exp(n2*lnq - i2nu)
+       
+       dterm(1) = monen * twonm1 * (exp2nm1plus + exp2nm1minus)
+       dterm(2) = twonm1 * (exp2nm1plus - exp2nm1minus)
+       dterm(3) = twon * (exp2nplus - exp2nminus)
+       dterm(4) = monen * twon * (exp2nplus - exp2nminus)
+
+       dthetas = dthetas + dterm
+
+       abserr = maxval(abs(dterm))
+       
+    end do
+
+    
+    dthetas(1) = -dthetas(1)
+    dthetas(2) = -dthetas(2)/i
+    dthetas(3) = -dthetas(3)/i
+    dthetas(4) = -dthetas(4)/i
+    
+    if (debug) then
+       write(*,*)'deriv_elliptic_thetas_fourier_series'
+       write(*,*)'u = lnq = ',u,lnq
+       write(*,*)'errors  = ',dterm
+       write(*,*)'dthetas = ',dthetas
+    endif
+    
+  end function deriv_elliptic_thetas_fourier_series
+
+
+  
       
 end module fflint
