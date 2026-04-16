@@ -55,9 +55,13 @@ module sundials
 #ifdef SUNOPENMP  
   integer, parameter :: nthreads = 2
 #endif
+
+
+  logical, save :: stopOnError = .true.
+  
   
   public easycvode, easycvquad
-  public cvode_set_instance, cvode_get_instance
+  public cvode_set_instance, cvode_get_instance, cvode_set_onerror
   public stepscvode_nls, stepscvode_ls
   
 contains
@@ -81,7 +85,15 @@ contains
     cvode_get_instance = inst
 
   end function  cvode_get_instance
-  
+
+
+  subroutine cvode_set_onerror(state)
+    implicit none
+    logical, intent(in) :: state
+
+    stopOnError = state
+    
+  end subroutine cvode_set_onerror
   
 !non-linear solver
   function easycvode(n,cvoderhs,tini,yini,tend,tol,tola)
@@ -95,7 +107,7 @@ contains
     real(fdp), dimension(n) :: easycvode
 
     real(fdp), dimension(n,1) :: output
-       
+
     output = stepscvode_nls(n,cvoderhs,tini,yini,(/tend/),tol,tola)
     
     easycvode = output(1:n,1) 
@@ -246,7 +258,11 @@ contains
        ierr = FCVode(sun%mem, tout, sun%vecY, tcur, CV_NORMAL)
 
        if (ierr.ne.0) then
-          stop 'stepscvode_nls: error in FCVode, integration failed!'
+          write(*,*)'stepscvode_nls:'
+          write(*,*)'tini = yini =  ',tini,yini
+          write(*,*)'tend =         ',tend
+          write(*,*)'ierr =         ',ierr
+          if (stopOnError) stop 'stepscvode_nls: error in FCVode, integration failed!'
        endif
 
        stepscvode_nls(1:n,i) = yvec(1:n)
@@ -397,7 +413,11 @@ contains
        ierr = FCVode(sun%mem, tout, sun%vecY, tcur, CV_NORMAL)
 
        if (ierr.ne.0) then
-          stop 'stepscvode_ls: error in FCVode, integration failed!'
+          write(*,*)'stepscvode_ls:'
+          write(*,*)'tini = yini =  ',tini,yini
+          write(*,*)'tend =         ',tend
+          write(*,*)'ierr =         ',ierr
+          if (stopOnError) stop 'stepscvode_ls: error in FCVode, integration failed!'
        endif
 
        stepscvode_ls(1:n,i) = yvec(1:n)
