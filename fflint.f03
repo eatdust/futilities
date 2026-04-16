@@ -288,10 +288,11 @@ contains
 
 
 !direct calculation of thetas by fourier series  
-  recursive function elliptic_thetas_fourier_series(u,lnq,tol) result(thetas)
+  recursive function elliptic_thetas_fourier_series(u,lnq,tol,lnw) result(thetas)
     implicit none
     complex(fdp), intent(in) :: u,lnq
     real(fdp), intent(in), optional :: tol
+    complex(fdp), intent(in), optional :: lnw
     
     complex(fdp), dimension(ntheta) :: thetas, tasthe
     
@@ -311,21 +312,33 @@ contains
     real(fdp), parameter :: logeps = log(epsilon(0._fdp))
     real(fdp), parameter :: toosmall = 0.25_fdp
 
+    complex(fdp) :: lnnorm
+    
     logical, parameter :: debug = .false.
     
     integer :: n
-        
+
+    if (present(lnw)) then
+       lnnorm = lnw
+    else
+       lnnorm = cmplx(0._fdp,0._fdp,fdp)
+    endif
+    
 
     if (abs(lnq).le.toosmall) then
        uolnq = u/lnq
        sqrpiolnq = sqrt(-pidp/lnq)
-       
-       tasthe = exp(u*uolnq) * elliptic_thetas_fourier_series(-uolnq*ipi,pi2/lnq,tol)
+
+       lnnorm = u*uolnq
+!the NaN way
+!       tasthe = exp(u*uolnq) * elliptic_thetas_fourier_series(-uolnq*ipi,pi2/lnq,tol)
+       tasthe = elliptic_thetas_fourier_series(-uolnq*ipi,pi2/lnq,tol,lnnorm)
        
        thetas(1) = -i*sqrpiolnq*tasthe(1)
        thetas(2) = sqrpiolnq*tasthe(4)
        thetas(3) = sqrpiolnq*tasthe(3)
        thetas(4) = sqrpiolnq*tasthe(2)       
+
        return
     endif
             
@@ -350,10 +363,10 @@ contains
 
        i2nm1u = twonm1*u*i
        i2nu = twon*u*i
-       exp2nm1plus = exp(nmhalf2*lnq + i2nm1u)
-       exp2nm1minus = exp(nmhalf2*lnq - i2nm1u)
-       exp2nplus = exp(n2*lnq + i2nu)
-       exp2nminus = exp(n2*lnq - i2nu)
+       exp2nm1plus = exp(nmhalf2*lnq + i2nm1u + lnnorm)
+       exp2nm1minus = exp(nmhalf2*lnq - i2nm1u + lnnorm)
+       exp2nplus = exp(n2*lnq + i2nu + lnnorm)
+       exp2nminus = exp(n2*lnq - i2nu + lnnorm)
 
        term(1) = monen * (exp2nm1plus - exp2nm1minus)
        term(2) = exp2nm1plus + exp2nm1minus
@@ -367,8 +380,8 @@ contains
     end do
     
     thetas(1) = -thetas(1)/i
-    thetas(3) = 1._fdp + thetas(3)
-    thetas(4) = 1._fdp + thetas(4)
+    thetas(3) = exp(lnnorm) + thetas(3)
+    thetas(4) = exp(lnnorm) + thetas(4)
        
     if (debug) then
        write(*,*)'elliptic_thetas_fourier_series'
@@ -380,17 +393,18 @@ contains
   end function elliptic_thetas_fourier_series
 
 !direct calculation of d(thetas)/du by fourier series  
-  recursive function deriv_elliptic_thetas_fourier_series(u,lnq,tol) result(dthetas)
+  recursive function deriv_elliptic_thetas_fourier_series(u,lnq,tol,lnw) result(dthetas)
     implicit none
     complex(fdp), intent(in) :: u,lnq
     real(fdp), intent(in), optional :: tol
+    complex(fdp), intent(in), optional :: lnw
     
     complex(fdp), dimension(ntheta) :: dthetas
     
     real(fdp) :: twon, twonm1, n2, nmhalf2, monen
     real(fdp) :: abserr, maxerr
     
-    complex(fdp) :: uolnq, twouoipi, piolnqthreehalfexpu2olnq
+    complex(fdp) :: uolnq, twouoipi
     complex(fdp) :: i2nm1u,i2nu
     complex(fdp) :: exp2nm1plus,exp2nm1minus,exp2nplus,exp2nminus
     
@@ -404,22 +418,41 @@ contains
     real(fdp), parameter :: toosmall = 0.25_fdp
     complex(fdp), dimension(ntheta) :: thetas, dtasthe
 
+    complex(fdp) :: lnnorm
+    
     logical, parameter :: debug = .false.
     
     integer :: n
 
+    if (present(lnw)) then
+       lnnorm = lnw
+    else
+       lnnorm = cmplx(0._fdp,0._fdp,fdp)
+    endif
+    
 
     if (abs(lnq).le.toosmall) then
        uolnq = u/lnq
        twouoipi = 2._fdp*u/ipi
-       piolnqthreehalfexpu2olnq = sqrt(-pidp/lnq)*(-pidp/lnq) * exp(u*uolnq)
-       thetas = elliptic_thetas_fourier_series(-uolnq*ipi,pi2/lnq,tol)
-       dtasthe = deriv_elliptic_thetas_fourier_series(-uolnq*ipi,pi2/lnq,tol)
 
-       dthetas(1) = piolnqthreehalfexpu2olnq * ( dtasthe(1) - thetas(1)*twouoipi )
-       dthetas(2) = piolnqthreehalfexpu2olnq * ( dtasthe(4) - thetas(4)*twouoipi ) * i
-       dthetas(3) = piolnqthreehalfexpu2olnq * ( dtasthe(3) - thetas(3)*twouoipi ) * i
-       dthetas(4) = piolnqthreehalfexpu2olnq * ( dtasthe(2) - thetas(2)*twouoipi ) * i
+!the Nan way       
+!       piolnqthreehalfexpu2olnq = sqrt(-pidp/lnq)*(-pidp/lnq) * exp(u*uolnq)
+!       thetas = elliptic_thetas_fourier_series(-uolnq*ipi,pi2/lnq,tol)
+!       dtasthe = deriv_elliptic_thetas_fourier_series(-uolnq*ipi,pi2/lnq,tol)
+!       dthetas(1) = piolnqthreehalfexpu2olnq * ( dtasthe(1) - thetas(1)*twouoipi )
+!       dthetas(2) = piolnqthreehalfexpu2olnq * ( dtasthe(4) - thetas(4)*twouoipi ) * i
+!       dthetas(3) = piolnqthreehalfexpu2olnq * ( dtasthe(3) - thetas(3)*twouoipi ) * i
+!       dthetas(4) = piolnqthreehalfexpu2olnq * ( dtasthe(2) - thetas(2)*twouoipi ) * i
+       
+       lnnorm = u*uolnq + 1.5_fdp*log(-pidp/lnq)
+       thetas = elliptic_thetas_fourier_series(-uolnq*ipi,pi2/lnq,tol,lnnorm)
+       dtasthe = deriv_elliptic_thetas_fourier_series(-uolnq*ipi,pi2/lnq,tol,lnnorm)
+
+       dthetas(1) = ( dtasthe(1) - thetas(1)*twouoipi )
+       dthetas(2) = ( dtasthe(4) - thetas(4)*twouoipi ) * i
+       dthetas(3) = ( dtasthe(3) - thetas(3)*twouoipi ) * i
+       dthetas(4) = ( dtasthe(2) - thetas(2)*twouoipi ) * i
+       
        return
     endif
 
@@ -445,10 +478,10 @@ contains
 
        i2nm1u = twonm1*u*i
        i2nu = twon*u*i
-       exp2nm1plus = exp(nmhalf2*lnq + i2nm1u)
-       exp2nm1minus = exp(nmhalf2*lnq - i2nm1u)
-       exp2nplus = exp(n2*lnq + i2nu)
-       exp2nminus = exp(n2*lnq - i2nu)
+       exp2nm1plus = exp(nmhalf2*lnq + i2nm1u + lnnorm)
+       exp2nm1minus = exp(nmhalf2*lnq - i2nm1u + lnnorm)
+       exp2nplus = exp(n2*lnq + i2nu + lnnorm)
+       exp2nminus = exp(n2*lnq - i2nu + lnnorm)
        
        dterm(1) = monen * twonm1 * (exp2nm1plus + exp2nm1minus)
        dterm(2) = twonm1 * (exp2nm1plus - exp2nm1minus)
