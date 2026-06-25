@@ -130,22 +130,6 @@ contains
 
 
   
-!fortran to c string converter
-  function f_c_string(fname)
-    implicit none
-    character(len=*), intent(in) :: fname
-    character(kind=C_CHAR, len=len(fname)+1) :: f_c_string
-    integer :: i,n
-
-    n = len(fname)
-    do i=1,n
-       f_c_string(i:i) = fname(i:i)
-    enddo
-    f_c_string(n+1:n+1)=C_NULL_CHAR
-
-  end function f_c_string
-
-  
   function elliptic_thetas(u,lnq)
     implicit none
     complex(fdp), dimension(ntheta) :: elliptic_thetas
