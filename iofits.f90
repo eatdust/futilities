@@ -40,7 +40,7 @@ module iofits
      module procedure read_doubletable_fits
      module procedure read_floattable_fits
   end interface read_table_fits
-
+      
   interface close_table_fits
      module procedure close_doubletable_fits
      module procedure close_floattable_fits
@@ -55,6 +55,16 @@ module iofits
      module procedure stream_doubletable_fits
   end interface stream_table_fits
 
+  interface read_image_fits
+     module procedure read_floatimage_fits
+     module procedure read_doubleimage_fits
+  end interface read_image_fits
+
+  interface overwrite_image_fits
+     module procedure overwrite_floatimage_fits
+     module procedure overwrite_doubleimage_fits
+  end interface overwrite_image_fits
+  
   
   public write_twod_fits, check_fits_header, read_twod_fits
   public read_image_fits, copy_hdr_fits, overwrite_image_fits
@@ -216,7 +226,7 @@ contains
   
   
   
-  subroutine read_image_fits(filename,values)
+  subroutine read_floatimage_fits(filename,values)
     implicit none
     character(len=*) :: filename
     real(fsp), dimension(:,:), allocatable :: values
@@ -233,7 +243,7 @@ contains
 
     if (allocated(values)) then
        write(*,*)'image array already allocated!'
-       stop 'ERROR in read_image_fits'
+       stop 'ERROR in read_floatimage_fits'
     endif
     
     status=0
@@ -244,14 +254,14 @@ contains
     call ftghdt(unit,hdutype,status)
     if (hdutype .ne. 0) then
        write(*,*)'Fits file is not of image type!'
-       stop 'ERROR in read_image_fits'
+       stop 'ERROR in read_floatimage_fits'
     endif
     
     call ftgknj(unit,'NAXIS',1,2,naxes,nfound,status)
     
     if (nfound .ne. 2) then
        write(*,*) 'Failure in reading the NAXIS keywords'
-       stop 'ERROR in read_image_fits'
+       stop 'ERROR in read_floatimage_fits'
     endif
     group=1
     fpixel=1
@@ -261,12 +271,62 @@ contains
     call ftgpve(unit,group,fpixel,nelements,rnullval,values,anyf,status)
     call ftclos(unit, status)
     call ftfiou(unit, status)
+        
+  end subroutine read_floatimage_fits
+
+  
+  subroutine read_doubleimage_fits(filename,values)
+    implicit none
+    character(len=*) :: filename
+    real(fdp), dimension(:,:), allocatable :: values
+
     
+    integer, dimension(2) :: naxes
+    integer :: status,unit,readwrite,blocksize,nfound
+    integer :: hdutype, group, fpixel, nelements
+
+    real(fdp) :: rnullval = 0._fdp
     
-  end subroutine read_image_fits
+    logical :: anyf
 
 
-  subroutine overwrite_image_fits(filename,values)
+    if (allocated(values)) then
+       write(*,*)'image array already allocated!'
+       stop 'ERROR in read_doubleimage_fits'
+    endif
+    
+    status=0
+    call ftgiou(unit,status)
+    readwrite=0
+    call ftopen(unit,filename,readwrite,blocksize,status)
+
+    call ftghdt(unit,hdutype,status)
+    if (hdutype .ne. 0) then
+       write(*,*)'Fits file is not of image type!'
+       stop 'ERROR in read_doubleimage_fits'
+    endif
+    
+    call ftgknj(unit,'NAXIS',1,2,naxes,nfound,status)
+    
+    if (nfound .ne. 2) then
+       write(*,*) 'Failure in reading the NAXIS keywords'
+       stop 'ERROR in read_doubleimage_fits'
+    endif
+    group=1
+    fpixel=1
+    nelements=product(naxes)
+    allocate(values(naxes(1),naxes(2)))
+
+    call ftgpvd(unit,group,fpixel,nelements,rnullval,values,anyf,status)
+    call ftclos(unit, status)
+    call ftfiou(unit, status)
+    
+    
+  end subroutine read_doubleimage_fits
+
+  
+
+  subroutine overwrite_floatimage_fits(filename,values)
     implicit none
     character(len=*) :: filename
     real(fsp), dimension(:,:), allocatable :: values
@@ -278,7 +338,7 @@ contains
     
 
     if (.not.allocated(values)) then
-       stop 'overwrite_image_fits: no image provided!'
+       stop 'overwrite_floatimage_fits: no image provided!'
     endif
     
     status=0
@@ -293,14 +353,14 @@ contains
     call ftghdt(unit,hdutype,status)
     if (hdutype .ne. 0) then
        write(*,*)'Fits file is not of image type!'
-       stop 'ERROR in overwrite_image_fits'
+       stop 'ERROR in overwrite_floatimage_fits'
     endif
     
     call ftgknj(unit,'NAXIS',1,2,naxes,nfound,status)
     
     if (nfound .ne. 2) then
        write(*,*) 'Failure in reading the NAXIS keywords'
-       stop 'ERROR in overwrite_image_fits'
+       stop 'ERROR in overwrite_floatimage_fits'
     endif
     group=1
     fpixel=1
@@ -314,9 +374,58 @@ contains
     call ftfiou(unit, status)
     
     
-  end subroutine overwrite_image_fits
+  end subroutine overwrite_floatimage_fits
 
 
+  subroutine overwrite_doubleimage_fits(filename,values)
+    implicit none
+    character(len=*) :: filename
+    real(fdp), dimension(:,:), allocatable :: values
+
+    
+    integer, dimension(2) :: naxes
+    integer :: status,unit,readwrite,blocksize,nfound
+    integer :: hdutype, group, fpixel, nelements
+    
+
+    if (.not.allocated(values)) then
+       stop 'overwrite_doubleimage_fits: no image provided!'
+    endif
+    
+    status=0
+    call ftgiou(unit,status)
+    readwrite=1
+    call ftopen(unit,filename,readwrite,blocksize,status)
+
+    if (status.ne.0) then
+       stop 'overwrite_image_fits: file not found!'
+    endif
+       
+    call ftghdt(unit,hdutype,status)
+    if (hdutype .ne. 0) then
+       write(*,*)'Fits file is not of image type!'
+       stop 'ERROR in overwrite_doubleimage_fits'
+    endif
+    
+    call ftgknj(unit,'NAXIS',1,2,naxes,nfound,status)
+    
+    if (nfound .ne. 2) then
+       write(*,*) 'Failure in reading the NAXIS keywords'
+       stop 'ERROR in overwrite_doubleimage_fits'
+    endif
+    group=1
+    fpixel=1
+    nelements=product(naxes)
+    if ((naxes(1).ne.size(values,1)).or.(naxes(2).ne.size(values,2))) then
+       write(*,*) 'Overwritting with different image sizes'
+    endif
+    
+    call ftpprd(unit,group,fpixel,nelements,values,status)
+    call ftclos(unit, status)
+    call ftfiou(unit, status)
+        
+  end subroutine overwrite_doubleimage_fits
+  
   
   subroutine copy_hdr_fits(filein,fileout)
     implicit none
